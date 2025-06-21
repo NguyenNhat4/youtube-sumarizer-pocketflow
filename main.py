@@ -57,10 +57,12 @@ def main():
     # Run the flow
     flow.run(shared)
     
+    output_file = shared.get("output_html_file", "output.html")
+    
     # Report success and output file location
     print("\n" + "=" * 50)
     print("Processing completed successfully!")
-    print(f"Output HTML file: {os.path.abspath('output.html')}")
+    print(f"Output HTML file: {os.path.abspath(output_file)}")
     print("=" * 50 + "\n")
 
     return 0

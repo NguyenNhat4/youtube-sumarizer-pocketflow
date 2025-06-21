@@ -1,6 +1,7 @@
 from typing import List, Dict, Any, Tuple
 import yaml
 import logging
+import re
 from pocketflow import Node, BatchNode, Flow
 from utils.call_llm import call_llm
 from utils.youtube_processor import get_video_info
@@ -368,14 +369,22 @@ class GenerateHTML(Node):
         return html_content
     
     def post(self, shared, prep_res, exec_res):
-        """Store HTML output in shared"""
-        shared["html_output"] = exec_res
+        """Save HTML content to file"""
+        video_info = shared.get("video_info", {})
+        title = video_info.get("title", "output")
         
-        # Write HTML to file
-        with open("output.html", "w") as f:
+        # Sanitize title to create a valid filename
+        safe_title = re.sub(r'[^\w\s-]', '', title).strip().replace(' ', '_')
+        safe_title = safe_title[:100]  # Truncate to 100 chars
+        
+        filename = f"{safe_title}.html"
+        
+        # Save to the new filename
+        with open(filename, "w", encoding="utf-8") as f:
             f.write(exec_res)
         
-        logger.info("Generated HTML output and saved to output.html")
+        shared["output_html_file"] = filename
+        logger.info(f"Generated HTML output: {filename}")
         return "default"
 
 # Create the flow
