@@ -48,15 +48,44 @@ class ExtractTopicsAndQuestions(Node):
         video_info = shared.get("video_info", {})
         transcript = video_info.get("transcript", "")
         title = video_info.get("title", "")
-        return {"transcript": transcript, "title": title}
+        language = shared.get("language", "english")
+        return {"transcript": transcript, "title": title, "language": language}
     
     def exec(self, data):
         """Extract topics and generate questions using LLM"""
         transcript = data["transcript"]
         title = data["title"]
+        language = data["language"]
         
-        # Single prompt to extract topics and questions together
-        prompt = f"""
+        if language == "vietnamese":
+            prompt = f"""
+Bạn là một chuyên gia phân tích nội dung. Với một bản ghi video YouTube, hãy xác định tối đa 5 chủ đề thú vị nhất được thảo luận và tạo ra tối đa 3 câu hỏi kích thích tư duy nhất cho mỗi chủ đề.
+Những câu hỏi này không nhất thiết phải được hỏi trực tiếp trong video. Có thể là những câu hỏi làm rõ.
+
+TIÊU ĐỀ VIDEO: {title}
+
+BẢN GHI:
+{transcript}
+
+Định dạng phản hồi của bạn bằng YAML:
+
+```yaml
+topics:
+  - title: |
+        Tiêu đề chủ đề đầu tiên
+    questions:
+      - |
+        Câu hỏi 1 về chủ đề đầu tiên?
+      - |
+        Câu hỏi 2 ...
+  - title: |
+        Tiêu đề chủ đề thứ hai
+    questions:
+        ...
+```
+"""
+        else:
+            prompt = f"""
 You are an expert content analyzer. Given a YouTube video transcript, identify at most 5 most interesting topics discussed and generate at most 3 most thought-provoking questions for each topic.
 These questions don't need to be directly asked in the video. It's good to have clarification questions.
 
@@ -81,7 +110,7 @@ topics:
     questions:
         ...
 ```
-        """
+"""
         
         response = call_llm(prompt)
         
@@ -133,12 +162,14 @@ class ProcessContent(BatchNode):
         topics = shared.get("topics", [])
         video_info = shared.get("video_info", {})
         transcript = video_info.get("transcript", "")
+        language = shared.get("language", "english")
         
         batch_items = []
         for topic in topics:
             batch_items.append({
                 "topic": topic,
-                "transcript": transcript
+                "transcript": transcript,
+                "language": language
             })
         
         return batch_items
@@ -147,11 +178,50 @@ class ProcessContent(BatchNode):
         """Process a topic using LLM"""
         topic = item["topic"]
         transcript = item["transcript"]
+        language = item["language"]
         
         topic_title = topic["title"]
         questions = [q["original"] for q in topic["questions"]]
         
-        prompt = f"""You are a content simplifier for children. Given a topic and questions from a YouTube video, rephrase the topic title and questions to be clearer, and provide simple ELI5 (Explain Like I'm 5) answers.
+        if language == "vietnamese":
+            prompt = f"""Bạn là một người đơn giản hóa nội dung cho trẻ em. Với một chủ đề và các câu hỏi từ video YouTube, hãy diễn đạt lại tiêu đề chủ đề và các câu hỏi để rõ ràng hơn, và cung cấp câu trả lời đơn giảnแบบ ELI5 (Giải thích như cho đứa trẻ 5 tuổi).
+
+CHỦ ĐỀ: {topic_title}
+
+CÂU HỎI:
+{chr(10).join([f"- {q}" for q in questions])}
+
+TRÍCH ĐOẠN BẢN GHI:
+{transcript}
+
+Đối với tiêu đề chủ đề và câu hỏi:
+1. Giữ chúng hấp dẫn và thú vị, nhưng ngắn gọn
+
+Đối với câu trả lời của bạn:
+1. Định dạng chúng bằng HTML với các thẻ <b> và <i> để làm nổi bật.
+2. Ưu tiên danh sách với các thẻ <ol> và <li>. Lý tưởng nhất là <li> theo sau bởi <b> cho các điểm chính.
+3. Trích dẫn các từ khóa quan trọng nhưng giải thích chúng bằng ngôn ngữ dễ hiểu (ví dụ: "<b>Máy tính lượng tử</b> giống như có một chiếc máy tính ma thuật siêu nhanh")
+4. Giữ câu trả lời thú vị nhưng ngắn gọn
+
+Định dạng phản hồi của bạn bằng YAML:
+
+```yaml
+rephrased_title: |
+    Tiêu đề chủ đề thú vị trong 10 từ
+questions:
+  - original: |
+        {questions[0] if len(questions) > 0 else ''}
+    rephrased: |
+        Câu hỏi thú vị trong 15 từ
+    answer: |
+        Câu trả lời đơn giản mà một đứa trẻ 5 tuổi có thể hiểu trong 100 từ
+  - original: |
+        {questions[1] if len(questions) > 1 else ''}
+    ...
+```
+"""
+        else:
+            prompt = f"""You are a content simplifier for children. Given a topic and questions from a YouTube video, rephrase the topic title and questions to be clearer, and provide simple ELI5 (Explain Like I'm 5) answers.
 
 TOPIC: {topic_title}
 
@@ -186,7 +256,7 @@ questions:
         {questions[1] if len(questions) > 1 else ''}
     ...
 ```
-        """
+"""
         
         response = call_llm(prompt)
         

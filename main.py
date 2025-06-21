@@ -28,6 +28,12 @@ def main():
         help="YouTube video URL to process",
         required=False
     )
+    parser.add_argument(
+        "-v",
+        "--vietnamese",
+        action="store_true",
+        help="Use Vietnamese for processing (default is English)",
+    )
     args = parser.parse_args()
     
     # Get YouTube URL from arguments or prompt user
@@ -35,14 +41,17 @@ def main():
     if not url:
         url = input("Enter YouTube URL to process: ")
     
+    language = "vietnamese" if args.vietnamese else "english"
     logger.info(f"Starting YouTube content processor for URL: {url}")
+    logger.info(f"Language: {language}")
 
     # Create flow
     flow = create_youtube_processor_flow()
     
     # Initialize shared memory
     shared = {
-        "url": url
+        "url": url,
+        "language": language,
     }
     
     # Run the flow
