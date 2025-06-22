@@ -2,7 +2,7 @@ import argparse
 import logging
 import sys
 import os
-from flow import create_youtube_processor_flow
+from src.youtube_processor.flow import create_youtube_processor_flow, create_file_processor_flow
 
 # Set up logging
 logging.basicConfig(
@@ -16,18 +16,24 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 def main():
-    """Main function to run the YouTube content processor."""
+    """Main function to run the content processor."""
     
     # Parse command line arguments
     parser = argparse.ArgumentParser(
-        description="Process a YouTube video to extract topics, questions, and generate ELI5 answers."
+        description="Process a YouTube video or a folder of documents to extract topics, questions, and generate ELI5 answers."
     )
-    parser.add_argument(
+    group = parser.add_mutually_exclusive_group(required=False)
+    group.add_argument(
         "--url", 
         type=str, 
-        help="YouTube video URL to process",
-        required=False
+        help="YouTube video URL to process"
     )
+    group.add_argument(
+        "--folder",
+        type=str,
+        help="Path to a folder with .txt and .pdf files to process"
+    )
+
     parser.add_argument(
         "-v",
         "--vietnamese",
@@ -36,24 +42,29 @@ def main():
     )
     args = parser.parse_args()
     
-    # Get YouTube URL from arguments or prompt user
-    url = args.url
-    if not url:
-        url = input("Enter YouTube URL to process: ")
-    
-    language = "vietnamese" if args.vietnamese else "english"
-    logger.info(f"Starting YouTube content processor for URL: {url}")
-    logger.info(f"Language: {language}")
-
-    # Create flow
-    flow = create_youtube_processor_flow()
-    
     # Initialize shared memory
     shared = {
-        "url": url,
-        "language": language,
+        "language": "vietnamese" if args.vietnamese else "english",
     }
     
+    # Determine the flow to run
+    if args.folder:
+        logger.info(f"Starting file content processor for folder: {args.folder}")
+        flow = create_file_processor_flow()
+        shared["folder_path"] = args.folder
+    elif args.url:
+        logger.info(f"Starting YouTube content processor for URL: {args.url}")
+        flow = create_youtube_processor_flow()
+        shared["url"] = args.url
+    else:
+        # Default behavior or prompt user
+        url = input("Enter YouTube URL to process: ")
+        logger.info(f"Starting YouTube content processor for URL: {url}")
+        flow = create_youtube_processor_flow()
+        shared["url"] = url
+
+    logger.info(f"Language: {shared['language']}")
+
     # Run the flow
     flow.run(shared)
     

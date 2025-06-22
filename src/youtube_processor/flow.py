@@ -3,9 +3,10 @@ import yaml
 import logging
 import re
 from pocketflow import Node, BatchNode, Flow
-from utils.call_llm import call_llm
-from utils.youtube_processor import get_video_info
-from utils.html_generator import html_generator
+from .utils.call_llm import call_llm
+from .utils.youtube_processor import get_video_info
+from .utils.html_generator import html_generator
+from .utils.file_processor import process_folder
 
 # Set up logging
 logging.basicConfig(
@@ -15,6 +16,32 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # Define the specific nodes for the YouTube Content Processor
+
+class ProcessFolder(Node):
+    """Process a folder to extract text content"""
+    def prep(self, shared):
+        """Get folder_path from shared"""
+        return shared.get("folder_path", "")
+
+    def exec(self, folder_path):
+        """Extract text from all files in the folder"""
+        if not folder_path:
+            raise ValueError("No folder path provided")
+
+        logger.info(f"Processing folder: {folder_path}")
+        content_info = process_folder(folder_path)
+
+        if "error" in content_info:
+            raise ValueError(f"Error processing folder: {content_info['error']}")
+
+        return content_info
+
+    def post(self, shared, prep_res, exec_res):
+        """Store content information in shared"""
+        shared["video_info"] = exec_res # Re-use the same structure as video processing
+        logger.info(f"Content title: {exec_res.get('title')}")
+        logger.info(f"Content length: {len(exec_res.get('transcript', ''))}")
+        return "default"
 
 class ProcessYouTubeURL(Node):
     """Process YouTube URL to extract video information"""
@@ -60,7 +87,7 @@ class ExtractTopicsAndQuestions(Node):
         
         if language == "vietnamese":
             prompt = f"""
-Bạn là một chuyên gia phân tích nội dung. Với một bản ghi video YouTube, hãy xác định tối đa 5 chủ đề thú vị nhất được thảo luận và tạo ra tối đa 3 câu hỏi kích thích tư duy nhất cho mỗi chủ đề.
+Bạn là một chuyên gia phân tích nội dung. Với một bản ghi video YouTube, hãy xác định tối đa 5 chủ đề thú vị nhất được thảo luận và tạo ra thiểu 2 câu hỏi kích thích tư duy nhất cho mỗi chủ đề.
 Những câu hỏi này không nhất thiết phải được hỏi trực tiếp trong video. Có thể là những câu hỏi làm rõ.
 
 TIÊU ĐỀ VIDEO: {title}
@@ -279,40 +306,25 @@ questions:
     
     def post(self, shared, prep_res, exec_res_list):
         """Update topics with processed content in shared"""
-        topics = shared.get("topics", [])
         
-        # Map of original topic title to processed content
-        title_to_processed = {
-            result["title"]: result
-            for result in exec_res_list
-        }
+        # prep_res is the list of batch_items from prep()
+        # exec_res_list is the list of results from exec()
         
-        # Update the topics with processed content
-        for topic in topics:
-            topic_title = topic["title"]
-            if topic_title in title_to_processed:
-                processed = title_to_processed[topic_title]
-                
-                # Update topic with rephrased title
-                topic["rephrased_title"] = processed["rephrased_title"]
-                
-                # Map of original question to processed question
-                orig_to_processed = {
-                    q["original"]: q
-                    for q in processed["questions"]
-                }
-                
-                # Update each question
-                for q in topic["questions"]:
-                    original = q["original"]
-                    if original in orig_to_processed:
-                        processed_q = orig_to_processed[original]
-                        q["rephrased"] = processed_q.get("rephrased", original)
-                        q["answer"] = processed_q.get("answer", "")
-        
-        # Update shared with modified topics
-        shared["topics"] = topics
-        
+        for item, processed_data in zip(prep_res, exec_res_list):
+            topic = item["topic"] # This is a reference to a dictionary in shared["topics"]
+            
+            # Update the original topic with the new data
+            topic["rephrased_title"] = processed_data.get("rephrased_title", "")
+            
+            processed_questions = processed_data.get("questions", [])
+            
+            for i, q_orig in enumerate(topic["questions"]):
+                if i < len(processed_questions):
+                    q_proc = processed_questions[i]
+                    # The LLM might not return the 'original' field, so we just match by order
+                    q_orig["rephrased"] = q_proc.get("rephrased", "")
+                    q_orig["answer"] = q_proc.get("answer", "")
+
         logger.info(f"Processed content for {len(exec_res_list)} topics")
         return "default"
 
@@ -389,17 +401,31 @@ class GenerateHTML(Node):
 
 # Create the flow
 def create_youtube_processor_flow():
-    """Create and connect the nodes for the YouTube processor flow"""
+    """Build and return the PocketFlow for YouTube processing."""
+    
     # Create nodes
-    process_url = ProcessYouTubeURL(max_retries=2, wait=10)
-    extract_topics_and_questions = ExtractTopicsAndQuestions(max_retries=2, wait=10)
-    process_content = ProcessContent(max_retries=2, wait=10)
-    generate_html = GenerateHTML(max_retries=2, wait=10)
+    process_youtube_url = ProcessYouTubeURL()
+    extract_topics_questions = ExtractTopicsAndQuestions(max_retries=3)
+    process_content = ProcessContent(max_retries=3)
+    generate_html = GenerateHTML()
+
+    # Define flow
+    process_youtube_url >> extract_topics_questions >> process_content >> generate_html
     
-    # Connect nodes
-    process_url >> extract_topics_and_questions >> process_content >> generate_html
+    # Create and return flow
+    return Flow(start=process_youtube_url)
+
+def create_file_processor_flow():
+    """Build and return the PocketFlow for file processing."""
     
-    # Create flow
-    flow = Flow(start=process_url)
+    # Create nodes
+    process_folder_node = ProcessFolder()
+    extract_topics_questions = ExtractTopicsAndQuestions(max_retries=3)
+    process_content = ProcessContent(max_retries=3)
+    generate_html = GenerateHTML()
+
+    # Define flow
+    process_folder_node >> extract_topics_questions >> process_content >> generate_html
     
-    return flow
+    # Create and return flow
+    return Flow(start=process_folder_node)

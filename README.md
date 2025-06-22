@@ -1,14 +1,14 @@
-<h1 align="center">Explain Youtube Video To Me Like I'm 5</h1>
+<h1 align="center">Explain Youtube Video or Documents To Me Like I'm 5</h1>
 
 ![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)
 
-Have a 5-hour YouTube video but no time to watch it? This LLM application pulls the main topics and explains to you like you are 5, so you can catch up in just minutes.
+Have a 5-hour YouTube video or a folder of long documents but no time to read them? This LLM application pulls the main topics and explains them to you like you're 5, so you can catch up in just minutes.
 
 <div align="center">
   <img src="./assets/front.png" width="700"/>
 </div>
 
-Design Doc: [docs/design.md](docs/design.md), Flow Source Code: [flow.py](flow.py)
+Design Doc: [docs/design.md](docs/design.md), Flow Source Code: [src/youtube_processor/flow.py](src/youtube_processor/flow.py)
 
 Try running the code in your browser using the [demo notebook](https://colab.research.google.com/github/The-Pocket/Tutorial-Youtube-Made-Simple/blob/main/demo.ipynb).
 
@@ -24,22 +24,51 @@ Try running the code in your browser using the [demo notebook](https://colab.res
 
 ## How to Run
 
-1. Set up LLM in [`utils/call_llm.py`](./utils/call_llm.py) by providing credentials.
-   
-   You can refer to [LLM Wrappers](https://the-pocket.github.io/PocketFlow/utility_function/llm.html) for example implementations.
-   
-   You can verify that it is correctly set up by running:
-   ```bash
-   python utils/call_llm.py
-   ```
+### 1. Setup
 
-4. Install the dependencies and run the program:
+First, install the required dependencies:
 ```bash
 pip install -r requirements.txt
+```
+
+Next, set up your LLM credentials in `src/youtube_processor/utils/call_llm.py`. You can refer to the PocketFlow [LLM Wrappers documentation](https://the-pocket.github.io/PocketFlow/utility_function/llm.html) for guidance.
+
+You can verify that your LLM is correctly set up by running:
+```bash
+python src/youtube_processor/utils/call_llm.py
+```
+
+### 2. Run the Processor
+
+You can process content from either a YouTube URL or a local folder containing `.txt` and `.pdf` files.
+
+#### Process a YouTube Video
+```bash
 python main.py --url "https://www.youtube.com/watch?v=example"
 ```
 
-3. When it's done, open output.html (created in the project folder) to see the results.
+#### Process a Local Folder
+```bash
+python main.py --folder "path/to/your/folder"
+```
+
+If you don't provide a `--url` or `--folder` flag, the script will prompt you to enter a YouTube URL.
+
+#### Language Options
+
+You can process the content in English (default) or Vietnamese. Use the `-v` flag for Vietnamese:
+
+```bash
+# Process a YouTube video in Vietnamese
+python main.py --url "https://www.youtube.com/watch?v=example" -v
+
+# Process a local folder in Vietnamese
+python main.py --folder "path/to/your/folder" -v
+```
+
+### 3. View the Output
+
+When the script is finished, it will create an `output.html` file in the project folder. Open this file in your browser to see the results.
 
 ## I built this in just an hour, and you can, too.
 
