@@ -208,6 +208,10 @@ class ProcessContent(BatchNode):
         transcript = item["transcript"]
         language = item["language"]
         
+        # Truncate transcript to avoid token limits
+        if len(transcript) > 100000:
+            transcript = transcript[:100000]
+
         topic_title = topic["title"]
         questions = [q["original"] for q in topic["questions"]]
         
@@ -329,74 +333,72 @@ questions:
         return "default"
 
 class GenerateHTML(Node):
-    """Generate HTML output from processed content"""
+    """Generate the final HTML output file"""
     def prep(self, shared):
-        """Get video info and topics from shared"""
+        """Get all necessary data from shared"""
         video_info = shared.get("video_info", {})
         topics = shared.get("topics", [])
+        output_title = shared.get("output_title") # Can be None
         
+        # If no custom title, create one from the video/folder title
+        if not output_title:
+            base_title = video_info.get("title", "output")
+            # Sanitize the title to be a valid filename
+            output_title = re.sub(r'[\\/*?:"<>|]', "", base_title).replace(" ", "_")
+
         return {
-            "video_info": video_info,
-            "topics": topics
+            "title": video_info.get("title", ""),
+            "url": video_info.get("url", ""),
+            "thumbnail_url": video_info.get("thumbnail_url", ""),
+            "video_id": video_info.get("video_id", ""),
+            "topics": topics,
+            "output_title": output_title # Pass the final title to exec and post
         }
     
     def exec(self, data):
-        """Generate HTML using html_generator"""
-        video_info = data["video_info"]
-        topics = data["topics"]
-        
-        title = video_info.get("title", "YouTube Video Summary")
-        thumbnail_url = video_info.get("thumbnail_url", "")
-        
-        # Prepare sections for HTML
+        """Generate HTML content"""
+
+        # Prepare sections for HTML generator
         sections = []
-        for topic in topics:
-            # Skip topics without questions
+        for topic in data["topics"]:
             if not topic.get("questions"):
                 continue
-                
-            # Use rephrased_title if available, otherwise use original title
+            
             section_title = topic.get("rephrased_title", topic.get("title", ""))
             
-            # Prepare bullets for this section
             bullets = []
             for question in topic.get("questions", []):
-                # Use rephrased question if available, otherwise use original
                 q = question.get("rephrased", question.get("original", ""))
                 a = question.get("answer", "")
-                
-                # Only add bullets if both question and answer have content
                 if q.strip() and a.strip():
                     bullets.append((q, a))
             
-            # Only include section if it has bullets
             if bullets:
                 sections.append({
                     "title": section_title,
                     "bullets": bullets
                 })
-        
-        # Generate HTML
-        html_content = html_generator(title, thumbnail_url, sections)
-        return html_content
+
+        html_content = html_generator(
+            title=data["title"],
+            image_url=data["thumbnail_url"],
+            sections=sections
+        )
+        return {"html": html_content, "output_title": data["output_title"]}
     
     def post(self, shared, prep_res, exec_res):
-        """Save HTML content to file"""
-        video_info = shared.get("video_info", {})
-        title = video_info.get("title", "output")
+        """Save the HTML content to a file"""
+        html_content = exec_res["html"]
+        output_title = exec_res["output_title"]
         
-        # Sanitize title to create a valid filename
-        safe_title = re.sub(r'[^\w\s-]', '', title).strip().replace(' ', '_')
-        safe_title = safe_title[:100]  # Truncate to 100 chars
+        output_filename = f"{output_title}.html"
+        output_path = f"myoutput/current_output/{output_filename}"
         
-        filename = f"{safe_title}.html"
+        with open(output_path, "w", encoding="utf-8") as f:
+            f.write(html_content)
         
-        # Save to the new filename
-        with open(filename, "w", encoding="utf-8") as f:
-            f.write(exec_res)
-        
-        shared["output_html_file"] = filename
-        logger.info(f"Generated HTML output: {filename}")
+        shared["output_html_file"] = output_path
+        logger.info(f"Generated HTML report: {output_path}")
         return "default"
 
 # Create the flow

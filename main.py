@@ -40,11 +40,18 @@ def main():
         action="store_true",
         help="Use Vietnamese for processing (default is English)",
     )
+    parser.add_argument(
+        "-t",
+        "--title",
+        type=str,
+        help="Custom title for the output HTML file (e.g., 'my-awesome-summary')",
+    )
     args = parser.parse_args()
     
     # Initialize shared memory
     shared = {
         "language": "vietnamese" if args.vietnamese else "english",
+        "output_title": args.title if args.title else None
     }
     
     # Determine the flow to run
