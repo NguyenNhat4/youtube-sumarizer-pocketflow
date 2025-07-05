@@ -33,8 +33,8 @@ def call_llm(prompt: str) -> str:
     client = anthropic.Anthropic(api_key=api_key)
     
     response = client.messages.create(
-        model="claude-3-5-sonnet-20241022",
-        max_tokens=4000,
+        model="claude-sonnet-4-20250514",
+        max_tokens=20000,
         messages=[
             {"role": "user", "content": prompt}
         ]
@@ -49,7 +49,7 @@ def call_llm_with_history(messages: list) -> str:
     messages should be a list of {"role": "user"/"assistant", "content": "..."}
     Note: Anthropic uses "assistant" for AI responses (standard format)
     """
-    api_key = get_next_api_key()
+    api_key = get_next_api_key()  
     client = anthropic.Anthropic(api_key=api_key)
     
     # Convert messages to Anthropic format if needed
